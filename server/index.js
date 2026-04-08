@@ -9,6 +9,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Auth Middleware (Cadeado Mestre)
+const masterPassword = process.env.MASTER_PASSWORD;
+app.use((req, res, next) => {
+    // Permitir preflights CORS
+    if (req.method === 'OPTIONS') return next();
+    
+    // Ignorar se a senha não estiver configurada no servidor (para dev fail-safe)
+    if (!masterPassword) return next();
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== `Bearer ${masterPassword}`) {
+        return res.status(401).json({ error: 'Acesso Restrito: Senha Mestra incorreta ou ausente.' });
+    }
+    next();
+});
+
+// Endpoint check login
+app.post('/auth/verify', (req, res) => {
+    res.json({ status: 'success', message: 'Autenticado' });
+});
+
 // Proxy AI
 app.use('/api/ai', aiRoutes);
 
