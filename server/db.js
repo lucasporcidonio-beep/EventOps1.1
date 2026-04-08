@@ -131,6 +131,7 @@ function initDb() {
             `ALTER TABLE contracts ADD COLUMN entry_payment_date TEXT`,
             `ALTER TABLE contracts ADD COLUMN entry_payment_method TEXT`,
             `ALTER TABLE contracts ADD COLUMN entry_payment_confirmed INTEGER DEFAULT 0`,
+            `ALTER TABLE contracts ADD COLUMN generated_contract_text TEXT`,
             // Professionals
             `ALTER TABLE professionals ADD COLUMN pix_key TEXT`,
             `ALTER TABLE professionals ADD COLUMN phone TEXT`,
@@ -144,7 +145,9 @@ function initDb() {
             `ALTER TABLE assignments ADD COLUMN cache_payment_date TEXT`,
             `ALTER TABLE assignments ADD COLUMN date TEXT`,
             `ALTER TABLE assignments ADD COLUMN status TEXT`,
-            `ALTER TABLE assignments ADD COLUMN value REAL`
+            `ALTER TABLE assignments ADD COLUMN value REAL`,
+            // Expenses
+            `ALTER TABLE expenses ADD COLUMN category TEXT`
         ];
         autoMigrations.forEach(sql => {
             db.run(sql, (err) => {
@@ -163,6 +166,28 @@ function initDb() {
         // Set a random UUID for assignments that were restored without an ID
         db.run(`UPDATE assignments SET id = lower(hex(randomblob(16))) WHERE id IS NULL OR id = ''`, (err) => {
             if (!err) console.log('Assignments IDs populated if missing.');
+        });
+        
+        // MIGRATION: Auto-insert administrative expense for all events that don't have it
+        db.all(`SELECT id FROM events WHERE id NOT IN (
+            SELECT event_id FROM expenses WHERE description = 'Despesa Administrativa'
+        )`, [], async (err, rows) => {
+            if (!err && rows && rows.length > 0) {
+                const crypto = await import('crypto');
+                const adminDate = new Date().toISOString().split('T')[0];
+                let inserted = 0;
+                rows.forEach(row => {
+                    const expenseId = crypto.randomUUID();
+                    db.run(
+                        `INSERT INTO expenses (id, event_id, category, description, value, date) VALUES (?, ?, 'Administrativo', 'Despesa Administrativa', 50, ?)`, 
+                        [expenseId, row.id, adminDate], 
+                        (err) => {
+                            if (!err) inserted++;
+                            if (inserted === rows.length) console.log(`Backfilled R$50 Administrative expense for ${inserted} existing events.`);
+                        }
+                    );
+                });
+            }
         });
     });
 }

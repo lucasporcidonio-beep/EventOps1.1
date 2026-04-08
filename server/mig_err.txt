@@ -1,0 +1,32 @@
+◇ injected env (4) from .env // tip: ⌘ enable debugging { debug: true }
+Iniciando Migração do SQLite para o Supabase...
+
+Lendo [events] do SQLite...
+Encontrados 17 registros em [events]. Convertendo...
+Enviando 17 registros para o Supabase...
+✅ [events] Migrada com sucesso!
+
+Lendo [contracts] do SQLite...
+Encontrados 21 registros em [contracts]. Convertendo...
+Enviando 21 registros para o Supabase...
+
+ERR:
+Erro salvo em error_report.json
+❌ Erro fatal na migração de [contracts]: {
+  code: '23503',
+  details: 'Key (event_id)=(dd7f4298-ad9a-4b4b-9e5e-ece709429e64) is not present in table "events".',
+  hint: null,
+  message: 'insert or update on table "contracts" violates foreign key constraint "contracts_event_id_fkey"'
+}
+node:internal/process/promises:392
+      new UnhandledPromiseRejection(reason);
+      ^
+
+UnhandledPromiseRejection: This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). The promise rejected with the reason "#<Object>".
+    at throwUnhandledRejectionsMode (node:internal/process/promises:392:7)
+    at processPromiseRejections (node:internal/process/promises:475:17)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:32) {
+  code: 'ERR_UNHANDLED_REJECTION'
+}
+
+Node.js v24.12.0

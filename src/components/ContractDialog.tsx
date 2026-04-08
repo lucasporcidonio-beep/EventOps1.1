@@ -36,7 +36,10 @@ const PAYMENT_METHODS = ["Pix", "Dinheiro", "Cartão Crédito", "Cartão Débito
 
 const EXPENSE_CATEGORIES = ["Deslocamento", "Ingressos", "Material Impresso", "Alimentação", "Hospedagem", "Equipamento", "Outro"];
 
+import { ContractPDFDialog } from "./ContractPDFDialog";
+
 export function ContractDialog({ open, onOpenChange, event, contract, expenses, onUpdate, onAddExpense, onRemoveExpense, onUpdateExpense }: Props) {
+  const [isPdfOpen, setIsPdfOpen] = useState(false);
   const [newPaymentValue, setNewPaymentValue] = useState("");
   const [newPaymentMethod, setNewPaymentMethod] = useState("Pix");
   const [newPaymentNotes, setNewPaymentNotes] = useState("");
@@ -102,9 +105,14 @@ export function ContractDialog({ open, onOpenChange, event, contract, expenses, 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-card border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <FileText className="h-5 w-5" />
-            Contrato — {event.client_name}
+          <DialogTitle className="flex items-center justify-between text-foreground pe-6">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Contrato — {event.client_name}
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => setIsPdfOpen(true)}>
+              📝 Gerar Oficial PDF
+            </Button>
           </DialogTitle>
         </DialogHeader>
 
@@ -362,6 +370,14 @@ export function ContractDialog({ open, onOpenChange, event, contract, expenses, 
             </label>
           </div>
         </div>
+        
+        {/* Sub-Dialog for AI PDF Generator */}
+        <ContractPDFDialog 
+          open={isPdfOpen} 
+          onOpenChange={setIsPdfOpen} 
+          event={event} 
+        />
+        
       </DialogContent>
     </Dialog>
   );

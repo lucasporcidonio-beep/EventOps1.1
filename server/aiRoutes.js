@@ -378,4 +378,147 @@ router.post('/planning', async (req, res) => {
     }
 });
 
+const CONTRACT_MASTER_PROMPT = `
+Você é um especialista em contratos para fotógrafos de eventos no Brasil.
+Sua função é gerar contratos completos, profissionais e prontos para assinar.
+
+## REGRAS CRÍTICAS DE FORMATAÇÃO (SIGA EXATAMENTE):
+- Use Markdown rico: **negrito**, *itálico*, # Títulos, ### Seções, --- separadores, listas com *, numeração.
+- O título do contrato deve ser: # **CONTRATO DE PRESTAÇÃO DE SERVIÇOS FOTOGRÁFICOS – [TIPO DO EVENTO em MAIÚSCULO]**
+- Cada seção deve começar com ### **N. Nome da Seção**
+- Separar cada seção com ---
+- Nomes de pessoas SEMPRE em **negrito**
+- Valores monetários SEMPRE em **negrito**
+- Datas SEMPRE em **negrito**
+- Terminar com bloco de assinaturas completo incluindo: local/data, linha para o CONTRATANTE assinar, linha para o CONTRATADO assinar, espaço para 2 TESTEMUNHAS com Nome/CPF/Assinatura
+- Escreva a cidade de domicílio do CONTRATANTE como foro somente se diferente de Iperó.
+
+## ESTRUTURA OBRIGATÓRIA (12 seções):
+1. Qualificação das partes (CONTRATANTE e CONTRATADO, com todos os dados pessoais)
+2. Objeto do contrato (tipo de evento e nome se disponível, ex: casamento de Fulano & Ciclano)
+3. Dados do evento (data, horário, e TODOS os locais mencionados: residência, igreja, recepção etc)
+4. Descrição dos serviços (listar ponto a ponto: cobertura fotográfica, entrega editada em alta resolução, galeria online etc)
+5. Prazos de entrega (15 dias úteis padrão, incluir storymaker se contratado)
+6. Valor e forma de pagamento (detalhar CADA parcela mencionada, datas e valores EXATOS)
+7. Uso de imagem (autorização para portfólio e redes sociais)
+8. Obrigações das partes (do CONTRATADO e do CONTRATANTE separadamente)
+9. Cancelamento e rescisão (entrada não devolvida, prazo de comunicação 48h)
+10. Foro (comarca do CONTRATANTE ou Sorocaba, SP se não informado)
+11. Local, data e assinaturas
+12. Testemunhas (2 campos completos: Nome / CPF / Assinatura)
+
+## DADOS FIXOS DO CONTRATADO (FOTÓGRAFO – SEMPRE USAR ESSES DADOS):
+Nome: Lucas Henrique Nascimento Porcidonio
+Nacionalidade: brasileiro, casado
+Nascimento: 21/02/1991
+CPF: 376.274.348-74
+RG: 47.181.303-5
+Telefone: (15) 99748-5268
+Endereço: Rua Sérgio Siqueira, nº 59 – Bairro George Oetterer – Iperó/SP
+
+## FORMA DE TRABALHO (SEMPRE INCLUIR NA SEÇÃO DE SERVIÇOS):
+- Fotos entregues editadas e em alta resolução digital
+- Entrega por galeria online ou link para download
+- Prazo padrão: 15 dias úteis após o evento
+- Entrada obrigatória para reserva da data
+- Cancelamento = entrada não devolvida
+
+## ESTILO DE ESCRITA:
+Profissional e acessível. Use:
+✅ "prestação de serviços", "cobertura fotográfica", "valor combinado", "galeria online"
+❌ "outorgante", "avença", "doravante denominado", "instrumento de natureza contratual"
+
+## EXEMPLO DE SAÍDA ESPERADA:
+Para um casamento, a seção de assinaturas deve terminar assim:
+
+---
+
+**Sorocaba/SP, ____ de ____________________ de 2026.**
+
+---
+
+**CONTRATANTE:**
+
+---
+
+**[Nome do Contratante]**
+
+---
+
+**CONTRATADO:**
+
+---
+
+**Lucas Henrique Nascimento Porcidonio**
+
+---
+
+**TESTEMUNHAS:**
+
+1. Nome: __________________________
+   CPF: ____________________________
+   Assinatura: _____________________
+
+2. Nome: __________________________
+   CPF: ____________________________
+   Assinatura: _____________________
+
+---
+
+AGORA GERE O CONTRATO USANDO OS DADOS ABAIXO:
+`;
+
+router.post('/generate-contract', async (req, res) => {
+    try {
+        const { eventData, rawText } = req.body;
+        if (!eventData && !rawText) return res.status(400).json({ error: 'Missing eventData or rawText' });
+
+        const model = "gemini-2.0-flash";
+
+        let clientDataStr;
+        
+        if (rawText) {
+            // Mode 1: Raw text paste (WhatsApp format or free text)
+            clientDataStr = rawText;
+        } else {
+            // Mode 2: Structured data from database
+            const eventName = eventData.event_name 
+                || (eventData.groom_name && eventData.bride_name ? `${eventData.bride_name} & ${eventData.groom_name}` : null)
+                || eventData.debutante_name
+                || eventData.birthday_person_name
+                || '';
+            
+            clientDataStr = `
+Tipo de Evento: ${eventData.event_type || ""}
+Nome do Cliente/Contratante: ${eventData.client_name || ""}
+RG: ${eventData.client_rg || "Não informado"}
+Data de Nascimento: ${eventData.client_birthdate || "Não informada"}
+Celular: ${eventData.client_phone || ""}
+Endereço do Cliente: ${eventData.client_address || "Não informado"}
+Nome(s) no Evento: ${eventName}
+Data do Evento: ${eventData.event_date || ""}
+Local da Cerimônia/Igreja: ${eventData.ceremony_location || "A Definir"}
+Local da Recepção/Festa: ${eventData.reception_location || "A Definir"}
+Pacote/Serviços Contratados: ${eventData.package_name || eventData.main_service || "Fotografia"}
+Serviços adicionais: ${typeof eventData.additional_services === 'string' ? eventData.additional_services : JSON.stringify(eventData.additional_services || [])}
+Valor Total do Pacote: R$ ${eventData.contract?.total_value || eventData.package_value || "A definir"}
+Valor de Entrada: R$ ${eventData.contract?.entry_payment_value || "A definir"}
+`;
+        }
+
+        const response = await ai.models.generateContent({
+            model,
+            contents: CONTRACT_MASTER_PROMPT + clientDataStr,
+            config: { 
+                temperature: 0.15,
+            },
+        });
+
+        res.json({ contractText: response.text });
+    } catch (e) {
+        console.error("Contract Gen Error:", e);
+        res.status(500).json({ error: "Erro na geração do contrato." });
+    }
+});
+
 export default router;
