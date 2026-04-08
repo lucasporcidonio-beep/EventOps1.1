@@ -25,6 +25,8 @@
     { "source": "/sub_events/(.*)", "destination": "/server/index.js" },
     { "source": "/expenses", "destination": "/server/index.js" },
     { "source": "/expenses/(.*)", "destination": "/server/index.js" },
+    { "source": "/auth/verify", "destination": "/server/index.js" },
+    { "source": "/auth/(.*)", "destination": "/server/index.js" },
     { "source": "/api/ai/(.*)", "destination": "/server/index.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
