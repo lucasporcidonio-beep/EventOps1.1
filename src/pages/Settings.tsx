@@ -173,6 +173,29 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Segurança e Logout */}
+        <Card className="border-red-500/20">
+          <CardHeader>
+            <CardTitle>Segurança</CardTitle>
+            <CardDescription>
+              Encerre a sessão ativa no navegador e bloqueie o acesso aos dados do CRM.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                localStorage.removeItem("app_token");
+                toast.info("Sessão encerrada com sucesso.");
+                navigate("/login");
+              }}
+            >
+              Bloquear Cofre (Sair)
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

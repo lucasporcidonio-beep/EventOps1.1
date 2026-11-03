@@ -43,3 +43,5 @@ error_report.json
 *.ntvs*
 *.njsproj
 *.sw?
+
+.vercel
