@@ -7,10 +7,32 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node & dependencies
 node_modules
 dist
 dist-ssr
 *.local
+
+# Environment & credentials
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# Databases & data dumps
+*.sqlite
+*.sqlite3
+*.db
+server/database.sqlite
+*.jsonl
+error_report.json
+
+# Archives & binaries
+*.zip
+*.tar.gz
+*.rar
 
 # Editor directories and files
 .vscode/*
@@ -20,10 +42,4 @@ dist-ssr
 *.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
-
-.env
-server/.env
-database.sqlite
-server/database.sqlite

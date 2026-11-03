@@ -8,8 +8,21 @@ import type {
   SubEvent,
   EventExpense,
 } from "@/types";
-import { getApiUrl, apiFetch } from "@/lib/api";
+import { isFirebaseConfigured } from "@/lib/firebase";
+import * as firebaseService from "@/services/firebaseService";
+import { generateSeedEvents } from "@/data/seedEvents";
 import { toast } from "sonner";
+
+// Chaves para fallback local no localStorage quando o Firebase não estiver configurado
+const STORAGE_KEYS = {
+  EVENTS: "eventops_events",
+  CONTRACTS: "eventops_contracts",
+  PROFESSIONALS: "eventops_professionals",
+  ASSIGNMENTS: "eventops_assignments",
+  CHECKLISTS: "eventops_checklists",
+  SUB_EVENTS: "eventops_sub_events",
+  EXPENSES: "eventops_expenses",
+};
 
 export function useEvents() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -21,276 +34,520 @@ export function useEvents() {
   const [expenses, setExpenses] = useState<EventExpense[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const apiUrl = getApiUrl();
-
-
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [eRes, cRes, pRes, aRes, chRes, sRes, exRes] = await Promise.all([
-        apiFetch(`${apiUrl}/events`),
-        apiFetch(`${apiUrl}/contracts`),
-        apiFetch(`${apiUrl}/professionals`),
-        apiFetch(`${apiUrl}/assignments`),
-        apiFetch(`${apiUrl}/checklists`),
-        apiFetch(`${apiUrl}/sub_events`),
-        apiFetch(`${apiUrl}/expenses`),
-      ]);
-
-      if (!eRes.ok) throw new Error("Failed to fetch events");
-
-      const rawEvents = await eRes.json();
-      const validEvents = Array.isArray(rawEvents) ? rawEvents.map((e: any) => ({
-        ...e,
-        event_date: e.event_date || "", // Ensure string
-        coverage_start_time: e.coverage_start_time || "",
-        client_name: e.client_name || "Sem Nome",
-        main_service: e.main_service || "Serviço",
-        additional_services: Array.isArray(e.additional_services) ? e.additional_services : [],
-        operational_status: e.operational_status || "Planejado",
-        confirmation_status: e.confirmation_status || "Aguardando",
-      })).filter(e => e.id && e.event_date) : []; // Filter out events without ID or Date
-
-      setEvents(validEvents);
-      // setEvents(await eRes.json()); // Replaced by above
-      setContracts(await cRes.json());
-      setProfessionals(await pRes.json());
-      setAssignments(await aRes.json());
-      setChecklists(await chRes.json());
-      setSubEvents(await sRes.json());
-      setExpenses(await exRes.json());
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      toast.error("Erro ao conectar com servidor. Verifique se ele está rodando.");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiUrl]);
-
+  // Inicializa dados (Firebase em tempo real ou fallback local)
   useEffect(() => {
-    fetchData();
-    // Auto-refresh a cada 30 segundos (não sobrescreve dados locais recém-salvos)
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+    if (isFirebaseConfigured) {
+      setLoading(true);
 
-  // --- CRUD HELPERS ---
-  // Using optimistic updates for better UX would be complex here without a library like React Query or SWR.
-  // For simplicity and reliability in this refactor, we will do the request then update state locally if successful.
-
-  const addEvent = useCallback(async (event: Event) => {
-    try {
-      // 1. Create Event
-      await apiFetch(`${apiUrl}/events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(event),
+      // Subscreve a todas as coleções do Firestore em tempo real (onSnapshot)
+      const unsubEvents = firebaseService.subscribeToEvents((data) => {
+        setEvents(data);
+        setLoading(false);
       });
 
-      // 2. Create related initial data (contract, checklist, default expense)
-      const contract = { id: crypto.randomUUID(), event_id: event.id, total_value: event.package_value || 0, total_paid: 0, entry_payment_value: 0, entry_payment_confirmed: false, payment_history: [] };
-      const checklist = { id: crypto.randomUUID(), event_id: event.id, date_confirmed: false, time_confirmed: false, location_confirmed: false, contact_confirmed: false, authorized_event: false };
-      const expense = { id: crypto.randomUUID(), event_id: event.id, category: "Deslocamento", description: "Deslocamento padrão", value: 50, date: new Date().toISOString().split("T")[0] };
+      const unsubContracts = firebaseService.subscribeToContracts(setContracts);
+      const unsubProfessionals = firebaseService.subscribeToProfessionals(setProfessionals);
+      const unsubAssignments = firebaseService.subscribeToAssignments(setAssignments);
+      const unsubChecklists = firebaseService.subscribeToChecklists(setChecklists);
+      const unsubSubEvents = firebaseService.subscribeToSubEvents(setSubEvents);
+      const unsubExpenses = firebaseService.subscribeToExpenses(setExpenses);
 
-      await Promise.all([
-        apiFetch(`${apiUrl}/contracts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(contract) }),
-        apiFetch(`${apiUrl}/checklists`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(checklist) }),
-        apiFetch(`${apiUrl}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expense) }),
-      ]);
-
-      // Update local state
-      setEvents(p => [...p, event]);
-      setContracts(p => [...p, contract as any]);
-      setChecklists(p => [...p, checklist as any]);
-      setExpenses(p => [...p, expense as any]);
-      toast.success("Evento criado com sucesso!");
-    } catch (err) {
-      toast.error("Erro ao criar evento.");
-    }
-  }, [apiUrl]);
-
-  const updateEvent = useCallback(async (id: string, data: Partial<Event>) => {
-    try {
-      await apiFetch(`${apiUrl}/events/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      setEvents(p => p.map(e => e.id === id ? { ...e, ...data } : e));
-    } catch (err) { toast.error("Erro ao atualizar evento."); }
-  }, [apiUrl]);
-
-  const deleteEvent = useCallback(async (id: string) => {
-    try {
-      await apiFetch(`${apiUrl}/events/${id}`, { method: "DELETE" });
-      setEvents(p => p.filter(e => e.id !== id));
-      // Handled by ON DELETE CASCADE in DB for related tables, but update local state
-      setContracts(p => p.filter(c => c.event_id !== id));
-      setAssignments(p => p.filter(a => a.event_id !== id));
-      setSubEvents(p => p.filter(s => s.parent_event_id !== id));
-      setExpenses(p => p.filter(e => e.event_id !== id));
-      setChecklists(p => p.filter(c => c.event_id !== id));
-      toast.success("Evento excluído.");
-    } catch (err) { toast.error("Erro ao excluir evento."); }
-  }, [apiUrl]);
-
-  // CONTRACTS
-  const updateContract = useCallback(async (eventId: string, data: Partial<Contract>) => {
-    try {
-      // Use event_id-based route — contract id may be null from DB restore. Backend now handles UPSERT.
-      const res = await apiFetch(`/contracts/by-event/${eventId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        toast.error(`Erro ao salvar: ${errBody.error || res.status}`);
-        return;
-      }
-      
-      const resData = await res.json();
-      
-      setContracts(p => {
-        const exists = p.find(c => c.event_id === eventId);
-        if (exists) {
-          return p.map(c => c.event_id === eventId ? { ...c, ...data } : c);
+      return () => {
+        unsubEvents();
+        unsubContracts();
+        unsubProfessionals();
+        unsubAssignments();
+        unsubChecklists();
+        unsubSubEvents();
+        unsubExpenses();
+      };
+    } else {
+      // Modo Local / Demo via localStorage
+      try {
+        const storedEvents = localStorage.getItem(STORAGE_KEYS.EVENTS);
+        if (storedEvents) {
+          setEvents(JSON.parse(storedEvents));
+          setContracts(JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTRACTS) || "[]"));
+          setProfessionals(JSON.parse(localStorage.getItem(STORAGE_KEYS.PROFESSIONALS) || "[]"));
+          setAssignments(JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS) || "[]"));
+          setChecklists(JSON.parse(localStorage.getItem(STORAGE_KEYS.CHECKLISTS) || "[]"));
+          setSubEvents(JSON.parse(localStorage.getItem(STORAGE_KEYS.SUB_EVENTS) || "[]"));
+          setExpenses(JSON.parse(localStorage.getItem(STORAGE_KEYS.EXPENSES) || "[]"));
         } else {
-          // It was inserted by the backend Upsert. Create a new contract object in local state.
-          const newContract = {
-            id: resData.id || crypto.randomUUID(),
-            event_id: eventId,
-            total_value: data.total_value || 0,
-            total_paid: data.total_paid || 0,
-            entry_payment_value: data.entry_payment_value || 0,
-            entry_payment_confirmed: data.entry_payment_confirmed || false,
-            payment_history: data.payment_history || [],
-            signed: data.signed || false,
-            ...data
-          };
-          return [...p, newContract as Contract];
+          // Inicializa com dados de seed
+          const seed = generateSeedEvents();
+          setEvents(seed.events);
+          setContracts(seed.contracts);
+          setProfessionals(seed.professionals);
+          setChecklists(seed.checklists);
+
+          localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(seed.events));
+          localStorage.setItem(STORAGE_KEYS.CONTRACTS, JSON.stringify(seed.contracts));
+          localStorage.setItem(STORAGE_KEYS.PROFESSIONALS, JSON.stringify(seed.professionals));
+          localStorage.setItem(STORAGE_KEYS.CHECKLISTS, JSON.stringify(seed.checklists));
         }
-      });
-    } catch (err) {
-      toast.error("Servidor inacessível. Verifique se está rodando na porta 3000.");
+      } catch (err) {
+        console.error("Erro ao carregar dados locais:", err);
+      } finally {
+        setLoading(false);
+      }
     }
   }, []);
 
-  // PROFESSIONALS
-  const addProfessional = useCallback(async (prof: Professional) => {
-    try {
-      await apiFetch(`${apiUrl}/professionals`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(prof) });
-      setProfessionals(p => [...p, prof]);
-      toast.success("Profissional adicionado.");
-    } catch (err) { toast.error("Erro ao adicionar profissional."); }
-  }, [apiUrl]);
+  // Helper para persistir alterações no localStorage quando em modo demo
+  const saveToLocal = (key: string, data: any) => {
+    if (!isFirebaseConfigured) {
+      localStorage.setItem(key, JSON.stringify(data));
+    }
+  };
 
-  const removeProfessional = useCallback(async (id: string) => {
-    try {
-      await apiFetch(`${apiUrl}/professionals/${id}`, { method: "DELETE" });
-      setProfessionals(p => p.filter(prof => prof.id !== id));
-      setAssignments(p => p.filter(a => a.professional_id !== id));
-    } catch (err) { toast.error("Erro ao remover profissional."); }
-  }, [apiUrl]);
+  // --- CRUD: EVENTOS ---
+  const addEvent = useCallback(
+    async (event: Event) => {
+      const contract: Contract = {
+        id: crypto.randomUUID(),
+        event_id: event.id,
+        total_value: event.package_value || 0,
+        total_paid: 0,
+        entry_payment_value: 0,
+        entry_payment_confirmed: false,
+        payment_history: [],
+        signed: false,
+      };
 
-  // ASSIGNMENTS
-  const assignProfessional = useCallback(async (assignment: TeamAssignment) => {
-    try {
-      // Check if exists logic moved to server ideally, but here we do frontend check/update
-      // Assuming clean assignment
-      // 1. Check if assistente trying to be primary (frontend check)
-      if (assignment.role === "Assistente" && assignment.primary) return false;
+      const checklist: ConfirmationChecklist = {
+        id: crypto.randomUUID(),
+        event_id: event.id,
+        event_date_confirmed: false,
+        coverage_time_confirmed: false,
+        locations_confirmed: false,
+        contact_name: event.client_name || "",
+        contact_phone: event.client_phone || "",
+        authorized: false,
+      };
 
-      // 2. Handle Primary switch (backend doesn't auto-handle logic, so we might need multiple calls or smarter backend)
-      // simple approach: just save this assignment.
+      const expense: EventExpense = {
+        id: crypto.randomUUID(),
+        event_id: event.id,
+        category: "Deslocamento",
+        description: "Deslocamento padrão",
+        value: 50,
+        date: new Date().toISOString().split("T")[0],
+      };
 
-      // Check existing
-      const existing = assignments.find(a => a.event_id === assignment.event_id && a.professional_id === assignment.professional_id);
-
-      if (existing) {
-        // Update
-        await apiFetch(`${apiUrl}/assignments/${existing.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(assignment) });
-        setAssignments(p => p.map(a => a.id === existing.id ? assignment : a));
-      } else {
-        // Create
-        await apiFetch(`${apiUrl}/assignments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(assignment) });
-        setAssignments(p => [...p, assignment]);
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.createEventWithDefaults(event, contract, checklist, expense);
+        } else {
+          setEvents((prev) => {
+            const next = [...prev, event];
+            saveToLocal(STORAGE_KEYS.EVENTS, next);
+            return next;
+          });
+          setContracts((prev) => {
+            const next = [...prev, contract];
+            saveToLocal(STORAGE_KEYS.CONTRACTS, next);
+            return next;
+          });
+          setChecklists((prev) => {
+            const next = [...prev, checklist];
+            saveToLocal(STORAGE_KEYS.CHECKLISTS, next);
+            return next;
+          });
+          setExpenses((prev) => {
+            const next = [...prev, expense];
+            saveToLocal(STORAGE_KEYS.EXPENSES, next);
+            return next;
+          });
+        }
+        toast.success("Evento criado com sucesso!");
+      } catch (err) {
+        console.error("Erro ao criar evento:", err);
+        toast.error("Erro ao criar evento.");
       }
-      return true;
-    } catch (err) { toast.error("Erro ao atribuir profissional."); return false; }
-  }, [apiUrl, assignments]);
+    },
+    []
+  );
 
-  const updateAssignment = useCallback(async (eventId: string, profId: string, data: Partial<TeamAssignment>) => {
-    const assignment = assignments.find(a => a.event_id === eventId && a.professional_id === profId);
-    if (!assignment) return;
-    try {
-      await apiFetch(`${apiUrl}/assignments/${assignment.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      setAssignments(p => p.map(a => a.id === assignment.id ? { ...a, ...data } : a));
-    } catch (err) { toast.error("Erro ao atualizar atribuição."); }
-  }, [apiUrl, assignments]);
+  const updateEvent = useCallback(
+    async (id: string, data: Partial<Event>) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.updateEventDoc(id, data);
+        } else {
+          setEvents((prev) => {
+            const next = prev.map((e) => (e.id === id ? { ...e, ...data } : e));
+            saveToLocal(STORAGE_KEYS.EVENTS, next);
+            return next;
+          });
+        }
+        toast.success("Evento atualizado!");
+      } catch (err) {
+        console.error("Erro ao atualizar evento:", err);
+        toast.error("Erro ao atualizar evento.");
+      }
+    },
+    []
+  );
 
-  const removeAssignment = useCallback(async (eventId: string, profId: string) => {
-    const assignment = assignments.find(a => a.event_id === eventId && a.professional_id === profId);
-    if (!assignment) return;
-    try {
-      await apiFetch(`${apiUrl}/assignments/${assignment.id}`, { method: "DELETE" });
-      setAssignments(p => p.filter(a => a.id !== assignment.id));
-    } catch (err) { toast.error("Erro ao remover atribuição."); }
-  }, [apiUrl, assignments]);
+  const deleteEvent = useCallback(
+    async (id: string) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.deleteEventDoc(id);
+        } else {
+          setEvents((p) => {
+            const next = p.filter((e) => e.id !== id);
+            saveToLocal(STORAGE_KEYS.EVENTS, next);
+            return next;
+          });
+          setContracts((p) => {
+            const next = p.filter((c) => c.event_id !== id);
+            saveToLocal(STORAGE_KEYS.CONTRACTS, next);
+            return next;
+          });
+          setAssignments((p) => {
+            const next = p.filter((a) => a.event_id !== id);
+            saveToLocal(STORAGE_KEYS.ASSIGNMENTS, next);
+            return next;
+          });
+          setSubEvents((p) => {
+            const next = p.filter((s) => s.parent_event_id !== id);
+            saveToLocal(STORAGE_KEYS.SUB_EVENTS, next);
+            return next;
+          });
+          setExpenses((p) => {
+            const next = p.filter((e) => e.event_id !== id);
+            saveToLocal(STORAGE_KEYS.EXPENSES, next);
+            return next;
+          });
+          setChecklists((p) => {
+            const next = p.filter((c) => c.event_id !== id);
+            saveToLocal(STORAGE_KEYS.CHECKLISTS, next);
+            return next;
+          });
+        }
+        toast.success("Evento excluído.");
+      } catch (err) {
+        console.error("Erro ao excluir evento:", err);
+        toast.error("Erro ao excluir evento.");
+      }
+    },
+    []
+  );
 
-  // CHECKLISTS
-  const updateChecklist = useCallback(async (eventId: string, data: Partial<ConfirmationChecklist>) => {
-    const checklist = checklists.find(c => c.event_id === eventId);
-    if (!checklist) return;
-    try {
-      await apiFetch(`${apiUrl}/checklists/${checklist.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      setChecklists(p => p.map(c => c.id === checklist.id ? { ...c, ...data } : c));
-    } catch (err) { toast.error("Erro ao atualizar checklist."); }
-  }, [apiUrl, checklists]);
+  // --- CRUD: CONTRATOS ---
+  const updateContract = useCallback(
+    async (eventId: string, data: Partial<Contract & { generated_contract_text?: string }>) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.upsertContractDoc(eventId, data);
+        } else {
+          setContracts((prev) => {
+            const exists = prev.find((c) => c.event_id === eventId);
+            let next: Contract[];
+            if (exists) {
+              next = prev.map((c) => (c.event_id === eventId ? { ...c, ...data } : c));
+            } else {
+              const newContract = {
+                id: crypto.randomUUID(),
+                event_id: eventId,
+                total_value: data.total_value || 0,
+                total_paid: data.total_paid || 0,
+                entry_payment_value: data.entry_payment_value || 0,
+                entry_payment_confirmed: data.entry_payment_confirmed || false,
+                payment_history: data.payment_history || [],
+                signed: data.signed || false,
+                ...data,
+              } as Contract;
+              next = [...prev, newContract];
+            }
+            saveToLocal(STORAGE_KEYS.CONTRACTS, next);
+            return next;
+          });
+        }
+        toast.success("Contrato salvo com sucesso!");
+      } catch (err) {
+        console.error("Erro ao atualizar contrato:", err);
+        toast.error("Erro ao salvar contrato.");
+      }
+    },
+    []
+  );
 
-  // SUBEVENTS
-  const addSubEvent = useCallback(async (subEvent: SubEvent) => {
-    try {
-      await apiFetch(`${apiUrl}/sub_events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subEvent) });
-      setSubEvents(p => [...p, subEvent]);
-    } catch (err) { toast.error("Erro ao criar sub-evento."); }
-  }, [apiUrl]);
+  // --- CRUD: PROFISSIONAIS ---
+  const addProfessional = useCallback(
+    async (prof: Professional) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.addProfessionalDoc(prof);
+        } else {
+          setProfessionals((p) => {
+            const next = [...p, prof];
+            saveToLocal(STORAGE_KEYS.PROFESSIONALS, next);
+            return next;
+          });
+        }
+        toast.success("Profissional adicionado.");
+      } catch (err) {
+        console.error("Erro ao adicionar profissional:", err);
+        toast.error("Erro ao adicionar profissional.");
+      }
+    },
+    []
+  );
 
-  const updateSubEvent = useCallback(async (id: string, data: Partial<SubEvent>) => {
-    try {
-      await apiFetch(`${apiUrl}/sub_events/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      setSubEvents(p => p.map(s => s.id === id ? { ...s, ...data } : s));
-    } catch (err) { toast.error("Erro ao atualizar sub-evento."); }
-  }, [apiUrl]);
+  const removeProfessional = useCallback(
+    async (id: string) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.deleteProfessionalDoc(id);
+        } else {
+          setProfessionals((p) => {
+            const next = p.filter((prof) => prof.id !== id);
+            saveToLocal(STORAGE_KEYS.PROFESSIONALS, next);
+            return next;
+          });
+          setAssignments((p) => {
+            const next = p.filter((a) => a.professional_id !== id);
+            saveToLocal(STORAGE_KEYS.ASSIGNMENTS, next);
+            return next;
+          });
+        }
+        toast.success("Profissional removido.");
+      } catch (err) {
+        console.error("Erro ao remover profissional:", err);
+        toast.error("Erro ao remover profissional.");
+      }
+    },
+    []
+  );
 
-  const deleteSubEvent = useCallback(async (id: string) => {
-    try {
-      await apiFetch(`${apiUrl}/sub_events/${id}`, { method: "DELETE" });
-      setSubEvents(p => p.filter(s => s.id !== id));
-    } catch (err) { toast.error("Erro ao excluir sub-evento."); }
-  }, [apiUrl]);
+  // --- CRUD: ATRIBUIÇÕES (ASSIGNMENTS) ---
+  const assignProfessional = useCallback(
+    async (assignment: TeamAssignment) => {
+      try {
+        if (assignment.role === "Assistente" && assignment.primary) return false;
 
-  // EXPENSES
-  const addExpense = useCallback(async (expense: EventExpense) => {
-    try {
-      await apiFetch(`${apiUrl}/expenses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(expense) });
-      setExpenses(p => [...p, expense]);
-    } catch (err) { toast.error("Erro ao adicionar despesa."); }
-  }, [apiUrl]);
+        if (isFirebaseConfigured) {
+          await firebaseService.saveAssignmentDoc(assignment);
+        } else {
+          setAssignments((p) => {
+            const existingIndex = p.findIndex(
+              (a) => a.event_id === assignment.event_id && a.professional_id === assignment.professional_id
+            );
+            let next: TeamAssignment[];
+            if (existingIndex >= 0) {
+              next = p.map((a, i) => (i === existingIndex ? assignment : a));
+            } else {
+              next = [...p, assignment];
+            }
+            saveToLocal(STORAGE_KEYS.ASSIGNMENTS, next);
+            return next;
+          });
+        }
+        return true;
+      } catch (err) {
+        console.error("Erro ao atribuir profissional:", err);
+        toast.error("Erro ao atribuir profissional.");
+        return false;
+      }
+    },
+    []
+  );
 
-  const updateExpense = useCallback(async (id: string, data: Partial<EventExpense>) => {
-    try {
-      await apiFetch(`${apiUrl}/expenses/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      setExpenses(p => p.map(e => e.id === id ? { ...e, ...data } : e));
-    } catch (err) { toast.error("Erro ao atualizar despesa."); }
-  }, [apiUrl]);
+  const updateAssignment = useCallback(
+    async (eventId: string, profId: string, data: Partial<TeamAssignment>) => {
+      const assignment = assignments.find((a) => a.event_id === eventId && a.professional_id === profId);
+      if (!assignment) return;
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.updateAssignmentDoc(assignment.id, data);
+        } else {
+          setAssignments((p) => {
+            const next = p.map((a) => (a.id === assignment.id ? { ...a, ...data } : a));
+            saveToLocal(STORAGE_KEYS.ASSIGNMENTS, next);
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao atualizar atribuição:", err);
+        toast.error("Erro ao atualizar atribuição.");
+      }
+    },
+    [assignments]
+  );
 
-  const removeExpense = useCallback(async (id: string) => {
-    try {
-      await apiFetch(`${apiUrl}/expenses/${id}`, { method: "DELETE" });
-      setExpenses(p => p.filter(e => e.id !== id));
-    } catch (err) { toast.error("Erro ao remover despesa."); }
-  }, [apiUrl]);
+  const removeAssignment = useCallback(
+    async (eventId: string, profId: string) => {
+      const assignment = assignments.find((a) => a.event_id === eventId && a.professional_id === profId);
+      if (!assignment) return;
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.removeAssignmentDoc(assignment.id);
+        } else {
+          setAssignments((p) => {
+            const next = p.filter((a) => a.id !== assignment.id);
+            saveToLocal(STORAGE_KEYS.ASSIGNMENTS, next);
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao remover atribuição:", err);
+        toast.error("Erro ao remover atribuição.");
+      }
+    },
+    [assignments]
+  );
+
+  // --- CRUD: CHECKLISTS ---
+  const updateChecklist = useCallback(
+    async (eventId: string, data: Partial<ConfirmationChecklist>) => {
+      const checklist = checklists.find((c) => c.event_id === eventId);
+      if (!checklist) return;
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.updateChecklistDoc(checklist.id, data);
+        } else {
+          setChecklists((p) => {
+            const next = p.map((c) => (c.id === checklist.id ? { ...c, ...data } : c));
+            saveToLocal(STORAGE_KEYS.CHECKLISTS, next);
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao atualizar checklist:", err);
+        toast.error("Erro ao atualizar checklist.");
+      }
+    },
+    [checklists]
+  );
+
+  // --- CRUD: SUB-EVENTOS ---
+  const addSubEvent = useCallback(
+    async (subEvent: SubEvent) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.addSubEventDoc(subEvent);
+        } else {
+          setSubEvents((p) => {
+            const next = [...p, subEvent];
+            saveToLocal(STORAGE_KEYS.SUB_EVENTS, next);
+            return next;
+          });
+        }
+        toast.success("Sub-evento criado.");
+      } catch (err) {
+        console.error("Erro ao criar sub-evento:", err);
+        toast.error("Erro ao criar sub-evento.");
+      }
+    },
+    []
+  );
+
+  const updateSubEvent = useCallback(
+    async (id: string, data: Partial<SubEvent>) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.updateSubEventDoc(id, data);
+        } else {
+          setSubEvents((p) => {
+            const next = p.map((s) => (s.id === id ? { ...s, ...data } : s));
+            saveToLocal(STORAGE_KEYS.SUB_EVENTS, next);
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao atualizar sub-evento:", err);
+        toast.error("Erro ao atualizar sub-evento.");
+      }
+    },
+    []
+  );
+
+  const deleteSubEvent = useCallback(
+    async (id: string) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.deleteSubEventDoc(id);
+        } else {
+          setSubEvents((p) => {
+            const next = p.filter((s) => s.id !== id);
+            saveToLocal(STORAGE_KEYS.SUB_EVENTS, next);
+            return next;
+          });
+        }
+        toast.success("Sub-evento excluído.");
+      } catch (err) {
+        console.error("Erro ao excluir sub-evento:", err);
+        toast.error("Erro ao excluir sub-evento.");
+      }
+    },
+    []
+  );
+
+  // --- CRUD: DESPESAS ---
+  const addExpense = useCallback(
+    async (expense: EventExpense) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.addExpenseDoc(expense);
+        } else {
+          setExpenses((p) => {
+            const next = [...p, expense];
+            saveToLocal(STORAGE_KEYS.EXPENSES, next);
+            return next;
+          });
+        }
+        toast.success("Despesa adicionada.");
+      } catch (err) {
+        console.error("Erro ao adicionar despesa:", err);
+        toast.error("Erro ao adicionar despesa.");
+      }
+    },
+    []
+  );
+
+  const updateExpense = useCallback(
+    async (id: string, data: Partial<EventExpense>) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.addExpenseDoc({ id, ...data } as EventExpense);
+        } else {
+          setExpenses((p) => {
+            const next = p.map((e) => (e.id === id ? { ...e, ...data } : e));
+            saveToLocal(STORAGE_KEYS.EXPENSES, next);
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao atualizar despesa:", err);
+        toast.error("Erro ao atualizar despesa.");
+      }
+    },
+    []
+  );
+
+  const removeExpense = useCallback(
+    async (id: string) => {
+      try {
+        if (isFirebaseConfigured) {
+          await firebaseService.deleteExpenseDoc(id);
+        } else {
+          setExpenses((p) => {
+            const next = p.filter((e) => e.id !== id);
+            saveToLocal(STORAGE_KEYS.EXPENSES, next);
+            return next;
+          });
+        }
+        toast.success("Despesa removida.");
+      } catch (err) {
+        console.error("Erro ao remover despesa:", err);
+        toast.error("Erro ao remover despesa.");
+      }
+    },
+    []
+  );
 
   const getConflicts = useCallback(
     (profId: string, eventId: string) => {
@@ -307,13 +564,13 @@ export function useEvents() {
     [events, assignments]
   );
 
-  // Sort events: by date, then by start time, exclude finalized
+  // Ordenação de eventos: por data, depois horário de início
   const sortedActiveEvents = [...events]
     .filter((e) => e.operational_status !== "Finalizado")
     .sort((a, b) => {
-      const dateComp = a.event_date.localeCompare(b.event_date);
+      const dateComp = (a.event_date || "").localeCompare(b.event_date || "");
       if (dateComp !== 0) return dateComp;
-      return a.coverage_start_time.localeCompare(b.coverage_start_time);
+      return (a.coverage_start_time || "").localeCompare(b.coverage_start_time || "");
     });
 
   return {
@@ -326,6 +583,7 @@ export function useEvents() {
     subEvents,
     expenses,
     loading,
+    isFirebaseConfigured,
     addEvent,
     updateEvent,
     deleteEvent,

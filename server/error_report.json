@@ -1,6 +1,0 @@
-{
-  "code": "23503",
-  "details": "Key (event_id)=(dd7f4298-ad9a-4b4b-9e5e-ece709429e64) is not present in table \"events\".",
-  "hint": null,
-  "message": "insert or update on table \"contracts\" violates foreign key constraint \"contracts_event_id_fkey\""
-}

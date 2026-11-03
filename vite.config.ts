@@ -11,21 +11,33 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
-    proxy: {
-      '/events': 'http://localhost:3000',
-      '/contracts': 'http://localhost:3000',
-      '/professionals': 'http://localhost:3000',
-      '/assignments': 'http://localhost:3000',
-      '/checklists': 'http://localhost:3000',
-      '/sub_events': 'http://localhost:3000',
-      '/expenses': 'http://localhost:3000',
-      '/api': 'http://localhost:3000',
-    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+          "vendor-firebase": ["firebase/app", "firebase/firestore", "firebase/auth"],
+          "vendor-ui": [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-dropdown-menu",
+            "@radix-ui/react-popover",
+            "@radix-ui/react-select",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-tooltip",
+            "lucide-react",
+          ],
+          "vendor-charts": ["recharts"],
+          "vendor-pdf": ["html2pdf.js"],
+        },
+      },
     },
   },
 }));
