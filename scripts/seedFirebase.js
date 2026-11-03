@@ -1,9 +1,22 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
-import * as dotenv from "dotenv";
-import { resolve } from "path";
+import fs from "fs";
+import path from "path";
 
-dotenv.config({ path: resolve(process.cwd(), ".env") });
+// Carrega .env manualmente caso --env-file não tenha sido passado
+const envPath = path.resolve(process.cwd(), ".env");
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf-8");
+  envContent.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...values] = trimmed.split("=");
+      if (key && values.length > 0) {
+        process.env[key.trim()] = values.join("=").trim();
+      }
+    }
+  });
+}
 
 const firebaseConfig = {
   apiKey: process.env.VITE_FIREBASE_API_KEY,

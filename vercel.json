@@ -1,33 +1,9 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "server/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build"
-    }
-  ],
+  "framework": "vite",
   "rewrites": [
-    { "source": "/events", "destination": "/server/index.js" },
-    { "source": "/events/(.*)", "destination": "/server/index.js" },
-    { "source": "/contracts", "destination": "/server/index.js" },
-    { "source": "/contracts/(.*)", "destination": "/server/index.js" },
-    { "source": "/professionals", "destination": "/server/index.js" },
-    { "source": "/professionals/(.*)", "destination": "/server/index.js" },
-    { "source": "/assignments", "destination": "/server/index.js" },
-    { "source": "/assignments/(.*)", "destination": "/server/index.js" },
-    { "source": "/checklists", "destination": "/server/index.js" },
-    { "source": "/checklists/(.*)", "destination": "/server/index.js" },
-    { "source": "/sub_events", "destination": "/server/index.js" },
-    { "source": "/sub_events/(.*)", "destination": "/server/index.js" },
-    { "source": "/expenses", "destination": "/server/index.js" },
-    { "source": "/expenses/(.*)", "destination": "/server/index.js" },
-    { "source": "/auth/verify", "destination": "/server/index.js" },
-    { "source": "/auth/(.*)", "destination": "/server/index.js" },
-    { "source": "/api/ai/(.*)", "destination": "/server/index.js" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
