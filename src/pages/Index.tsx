@@ -41,6 +41,9 @@ import { ptBR } from "date-fns/locale";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { EventFilters } from "@/components/dashboard/EventFilters";
 import { EventCard } from "@/components/dashboard/EventCard";
+import { HeroMetrics } from "@/components/dashboard/HeroMetrics";
+import { KanbanView } from "@/components/dashboard/KanbanView";
+import { LayoutGrid } from "lucide-react";
 
 export default function Dashboard() {
   const {
@@ -79,7 +82,7 @@ export default function Dashboard() {
   const [confirmEvent, setConfirmEvent] = useState<Event | null>(null);
   const [contractEvent, setContractEvent] = useState<Event | null>(null);
   const [subEventParent, setSubEventParent] = useState<Event | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "calendar" | "financial" | "team">("list");
+  const [viewMode, setViewMode] = useState<"list" | "kanban" | "calendar" | "financial" | "team">("list");
   const [showPastEvents, setShowPastEvents] = useState(false);
   const [concludeEvent, setConcludeEvent] = useState<Event | null>(null);
 
@@ -239,8 +242,18 @@ export default function Dashboard() {
                 size="sm"
                 className="rounded-none h-8 w-8 p-0"
                 onClick={() => setViewMode("list")}
+                title="Visualização em Lista"
               >
                 <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none h-8 w-8 p-0"
+                onClick={() => setViewMode("kanban")}
+                title="Visualização em Kanban (Fases)"
+              >
+                <LayoutGrid className="h-4 w-4" />
               </Button>
               <Button
                 variant={viewMode === "calendar" ? "default" : "ghost"}
@@ -339,6 +352,8 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4">
+        {/* Hero Metrics Dashboard (Top Stats) */}
+        <HeroMetrics events={events} contracts={contracts} assignments={assignments} />
         {/* Next Event Highlight */}
         {nextEvent && viewMode === "list" && (
           <div className="mb-4 p-3 rounded-xl border border-primary/30 bg-primary/5">
@@ -445,6 +460,18 @@ export default function Dashboard() {
           />
         ) : viewMode === "team" ? (
           <TeamWorkloadView events={events} professionals={professionals} assignments={assignments} />
+        ) : viewMode === "kanban" ? (
+          <KanbanView
+            events={events}
+            contracts={contracts}
+            professionals={professionals}
+            assignments={assignments}
+            onUpdateStatus={(eventId, newStatus) => updateEvent(eventId, { operational_status: newStatus })}
+            onSelectEvent={(event) => {
+              setEditEvent(event);
+              setShowEventForm(true);
+            }}
+          />
         ) : (
           /* Event Queue */
           filteredEvents.length === 0 ? (

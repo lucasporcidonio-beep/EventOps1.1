@@ -4,50 +4,51 @@
 
 @layer base {
   :root {
-    --background: 225 15% 8%;
-    --foreground: 210 20% 92%;
+    /* Cinzas Profundos (#09090b) e Esmeralda Vibrante (#10b981) */
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
 
-    --card: 225 14% 11%;
-    --card-foreground: 210 20% 92%;
+    --card: 240 10% 6.5%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 225 14% 13%;
-    --popover-foreground: 210 20% 92%;
+    --popover: 240 10% 8%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 213 80% 55%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 158 75% 45%;
+    --primary-foreground: 160 84% 5%;
 
-    --secondary: 225 12% 16%;
-    --secondary-foreground: 210 15% 75%;
+    --secondary: 240 6% 12%;
+    --secondary-foreground: 0 0% 85%;
 
-    --muted: 225 12% 14%;
-    --muted-foreground: 215 12% 50%;
+    --muted: 240 6% 12%;
+    --muted-foreground: 240 5% 65%;
 
-    --accent: 225 12% 18%;
-    --accent-foreground: 210 20% 88%;
+    --accent: 240 6% 14%;
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --warning: 45 90% 55%;
-    --warning-foreground: 30 50% 12%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
 
-    --success: 152 60% 42%;
-    --success-foreground: 0 0% 100%;
+    --success: 158 75% 45%;
+    --success-foreground: 160 84% 5%;
 
-    --border: 225 12% 18%;
-    --input: 225 12% 18%;
-    --ring: 213 80% 55%;
+    --border: 240 6% 14%;
+    --input: 240 6% 14%;
+    --ring: 158 75% 45%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 225 14% 10%;
-    --sidebar-foreground: 210 20% 92%;
-    --sidebar-primary: 213 80% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 225 12% 16%;
-    --sidebar-accent-foreground: 210 20% 88%;
-    --sidebar-border: 225 12% 18%;
-    --sidebar-ring: 213 80% 55%;
+    --sidebar-background: 240 10% 5%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 158 75% 45%;
+    --sidebar-primary-foreground: 160 84% 5%;
+    --sidebar-accent: 240 6% 12%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 6% 14%;
+    --sidebar-ring: 158 75% 45%;
   }
 }
 
@@ -57,7 +58,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased selection:bg-emerald-500/20 selection:text-emerald-300;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
@@ -67,16 +68,16 @@
 }
 
 @layer utilities {
-  .status-warning {
-    @apply bg-warning/15 border-warning/30 text-warning;
+  .emerald-glow {
+    box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.2);
   }
-  .status-danger {
-    @apply bg-destructive/15 border-destructive/30 text-destructive;
+  .emerald-glow-lg {
+    box-shadow: 0 0 40px -10px rgba(16, 185, 129, 0.35);
   }
-  .status-success {
-    @apply bg-success/15 border-success/30 text-success;
-  }
-  .status-neutral {
-    @apply bg-muted border-border text-muted-foreground;
+  .glass-panel {
+    background: rgba(18, 18, 22, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
   }
 }

@@ -41,6 +41,7 @@ import {
 import { cn } from "@/lib/utils";
 import { detectEventIcon } from "@/lib/eventTypeIcons";
 import { OperationalBadge, ConfirmationBadge } from "@/components/StatusBadge";
+import { WhatsAppActionMenu } from "@/components/WhatsAppActionMenu";
 
 interface EventCardProps {
     event: Event;
@@ -144,17 +145,7 @@ export function EventCard({
                         <h3 className="font-semibold text-foreground truncate text-sm sm:text-base">
                             {event.client_name}
                         </h3>
-                        {whatsappLink && (
-                            <a
-                                href={whatsappLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-success hover:text-success/80 shrink-0"
-                                title="WhatsApp"
-                            >
-                                <MessageCircle className="h-4 w-4" />
-                            </a>
-                        )}
+                        <WhatsAppActionMenu event={event} contract={contract} />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                         {isPast ? (
