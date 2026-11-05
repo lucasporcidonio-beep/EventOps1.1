@@ -1,16 +1,24 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { isFirebaseConfigured } from "@/lib/firebase";
-import { ArrowLeft, Upload, Download, Flame, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Upload, Download, Flame, CheckCircle2, AlertTriangle, RefreshCw, Sparkles, Key } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { generateSeedEvents } from "@/data/seedEvents";
 import * as firebaseService from "@/services/firebaseService";
+import { getGeminiApiKey, setGeminiApiKey } from "@/services/aiService";
 
 export default function Settings() {
   const navigate = useNavigate();
   const [isSeeding, setIsSeeding] = useState(false);
+  const [geminiKey, setGeminiKey] = useState(getGeminiApiKey());
+
+  const handleSaveGeminiKey = () => {
+    setGeminiApiKey(geminiKey);
+    toast.success("Chave da API Gemini salva com sucesso!");
+  };
 
   // Exportar backup local/firestore para arquivo JSON
   const handleExportJson = () => {
@@ -99,6 +107,48 @@ export default function Settings() {
       </div>
 
       <div className="space-y-6">
+        {/* Inteligência Artificial (Google Gemini) */}
+        <Card className="border-emerald-500/30 bg-zinc-950/60 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Sparkles className="h-5 w-5 text-emerald-400" />
+              Inteligência Artificial (Google Gemini)
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Conecte sua chave gratuita do Google AI Studio para geração personalizada de contratos e leitura automática de conversas do WhatsApp.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-300">API Key do Google Gemini:</label>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder="AIzaSy..."
+                  value={geminiKey}
+                  onChange={(e) => setGeminiKey(e.target.value)}
+                  className="bg-black/50 border-white/10 text-xs font-mono text-zinc-200"
+                />
+                <Button onClick={handleSaveGeminiKey} className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs">
+                  Salvar
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Obtenha sua chave gratuita em segundos no{" "}
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-400 underline"
+              >
+                Google AI Studio (aistudio.google.com)
+              </a>
+              . Sem a chave configurada, o sistema gera contratos usando o Template Jurídico Completo do Lucas.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Status do Banco Firebase */}
         <Card className={isFirebaseConfigured ? "border-emerald-500/50" : "border-amber-500/50"}>
           <CardHeader>
@@ -126,17 +176,6 @@ export default function Settings() {
                 </div>
               )}
             </div>
-
-            {!isFirebaseConfigured && (
-              <div className="bg-muted p-4 rounded-lg text-sm space-y-2">
-                <p className="font-semibold text-foreground">Como conectar seu Firebase em 3 passos:</p>
-                <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-xs sm:text-sm">
-                  <li>Acesse o <strong>Firebase Console</strong> (console.firebase.google.com) e crie um projeto gratuito.</li>
-                  <li>Ative o <strong>Cloud Firestore</strong> em modo de teste ou cole as regras de <code>firestore.rules</code>.</li>
-                  <li>Adicione um Web App (<code>&lt;/&gt;</code>) e copie as chaves para o arquivo <code>.env</code> na raiz do projeto.</li>
-                </ol>
-              </div>
-            )}
 
             {isFirebaseConfigured && (
               <Button onClick={handleSeedFirebase} disabled={isSeeding} className="w-full">
